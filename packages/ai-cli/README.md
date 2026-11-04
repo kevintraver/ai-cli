@@ -31,6 +31,8 @@ ai image "a cute dog"
 ai video "a spinning triangle"
 ai text "explain quantum computing"
 ai audio speak "Thanks for trying ai-cli"
+ai audio sfx "rain on a tin roof" --duration 5 --loop
+ai audio music "lo-fi beat with warm piano" --length 30
 ai audio transcribe recording.mp3
 ai decide --boolean "refund=Refund requested?" < ticket.txt
 ai models                          # list available models
@@ -62,7 +64,7 @@ Generation commands support:
 -n, --n <n>              Image/video outputs per model (default: 1)
 -n, --count <n>          Text/audio generations per model (default: 1)
 -p, --concurrency <n>    Max parallel generations (default: 4, video: 2)
---timeout <seconds>      Request timeout in seconds (default: text/audio 120, image 300, video 600)
+--timeout <seconds>      Request timeout in seconds (default: text/audio 120, image 300, video and audio music 600)
 -q, --quiet              Suppress progress output
 --json                   Output metadata as JSON
 ```
@@ -455,26 +457,38 @@ cat screenshot.png | ai text "list the visible errors"
 
 ### audio
 
-`audio` has two subcommands:
+`audio` has four subcommands:
 
 ```bash
 ai audio speak "Hello from AI Gateway"
+ai audio sfx "a heavy wooden door slams shut"
+ai audio music "upbeat synthwave with a driving bassline" --length 30
 ai audio transcribe recording.mp3
 ```
+
+`speak`, `sfx`, and `music` share these options:
+
+```
+-f, --format <fmt>          Audio output format (default: mp3)
+--provider-options <path>   JSON file of SDK providerOptions, including gateway routing
+--no-play                   Disable audio playback after generation
+--no-waveform               Disable accurate terminal waveform preview
+```
+
+Each one accepts its input from an argument or stdin and saves audio to `<id>.mp3` by default. When `-o` points to a file with a known audio extension and `--format` is omitted, the extension selects the audio format. If both are provided, `--format` must match the filename extension.
+
+In interactive terminals, these commands play the generated audio after saving it and show an accurate waveform derived from decoded audio samples. Use `--no-play` to skip playback and `--no-waveform` or `--quiet` to suppress the waveform. Playback and waveform previews are skipped for `--json` and binary stdout pipeline output. WAV output is decoded directly; MP3 and other encoded formats use a local decoder when available (`ffmpeg`, `mpg123`, `sox`, or `afconvert`).
 
 #### audio speak
 
 ```
--f, --format <fmt>       Audio output format (default: mp3)
 --voice <voice>          Voice to use for speech generation
 --instructions <text>    Instructions for speech generation
 --speed <n>              Speech speed
 --language <code>        Language code (e.g. en, fr) or auto
---no-play                Disable audio playback after generation
---no-waveform            Disable accurate terminal waveform preview
 ```
 
-`audio speak` accepts text from an argument or stdin and saves audio to `<id>.mp3` by default:
+`audio speak` reads text aloud with a text-to-speech model, `openai/tts-1` by default:
 
 ```bash
 ai audio speak --voice alloy "Read this as a friendly update"
@@ -483,9 +497,35 @@ cat announcement.txt | ai audio speak --format wav -o announcement.wav
 
 When using OpenAI speech models, `ai audio speak` defaults to the `alloy` voice unless `--voice` is provided.
 
-When `-o` points to a file with a known audio extension and `--format` is omitted, the extension selects the audio format. If both are provided, `--format` must match the filename extension.
+#### audio sfx
 
-In interactive terminals, `audio speak` plays the generated audio after saving it and shows an accurate waveform derived from decoded audio samples. Use `--no-play` to skip playback and `--no-waveform` or `--quiet` to suppress the waveform. Playback and waveform previews are skipped for `--json` and binary stdout pipeline output. WAV output is decoded directly; MP3 and other encoded formats use a local decoder when available (`ffmpeg`, `mpg123`, `sox`, or `afconvert`).
+```
+--duration <seconds>     Length in seconds, 0.5 to 30 (default: model chooses)
+--loop                   Make the sound loop
+--prompt-influence <n>   How closely to follow the prompt, 0 to 1
+```
+
+`audio sfx` generates a sound effect from a description, with `elevenlabs/sound-effects-v2` by default:
+
+```bash
+ai audio sfx "footsteps on gravel"
+ai audio sfx "steady rain on a tin roof" --duration 10 --loop -o rain.mp3
+```
+
+#### audio music
+
+```
+--length <seconds>       Length in seconds, 3 to 600 (default: model chooses)
+--instrumental           Generate music without vocals
+```
+
+`audio music` composes a track from a description, with `elevenlabs/music-v2.5` by default. Without `--length`, the model chooses the length, which can run to several minutes, and the Gateway bills music by the second:
+
+```bash
+ai audio music "lo-fi hip hop beat with warm piano" --length 30 --instrumental
+```
+
+`sfx` and `music` send their flags as ElevenLabs provider options. A `--provider-options` file can set any other [ElevenLabs sound effect or music setting](https://ai-sdk.dev/providers/ai-sdk-providers/elevenlabs). When the file and a flag set the same option, the file wins.
 
 #### audio transcribe
 
@@ -505,7 +545,7 @@ cat voice-note.mp3 | ai audio transcribe -o transcript.txt
 
 ```
 [model]                  Show detailed info for a model (e.g. anthropic/claude-opus-4.6)
---type <type>            Filter by type: text, image, video, audio, speech, transcription, evaluation
+--type <type>            Filter by type: text, image, video, audio, speech, sfx, music, transcription, evaluation
 --creator <name>         Filter by creator (e.g. openai, google)
 --json                   JSON including native Gateway capabilities and metadata
 --base-url <url>         Gateway baseURL
@@ -514,7 +554,7 @@ cat voice-note.mp3 | ai audio transcribe -o transcript.txt
 --headers <path>         JSON HTTP headers
 ```
 
-All supported model types (text, image, video, speech, transcription, evaluation) are fetched live from the AI Gateway.
+All supported model types (text, image, video, speech, sound effect, music, transcription, evaluation) are fetched live from the AI Gateway. The Gateway lists sound effect and music models as speech models; `ai models` separates them by tag, so `--type speech` lists only text-to-speech models and `--type audio` lists all four audio types.
 
 Pass a model ID (or short name) to see its context window, max output, pricing, release date and per-provider latency, throughput and uptime:
 
@@ -580,14 +620,14 @@ ai image "a sunset" -n 2 -m "openai/gpt-image-1,bfl/flux-2-pro"   # 4 images tot
 
 ### Inline Preview
 
-When running in a terminal that supports the [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol/) (Kitty, Ghostty, WezTerm, Warp, iTerm2), generated images and videos are displayed inline automatically. Image formats returned by models are preserved on disk and converted to PNG for terminal previews when needed. SVG previews use a 512-pixel long edge and an opaque white background. Video previews decode an H.264 keyframe from the midpoint of the video using [openh264](https://github.com/cisco/openh264) compiled to WebAssembly — no native dependencies required. `audio speak` can also play generated speech and render a terminal waveform after saving. Use `--no-preview` for image/video previews, `--no-play` or `--no-waveform` for audio previews, or set `AI_CLI_PREVIEW=1` to force visual previews on in undetected terminals.
+When running in a terminal that supports the [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol/) (Kitty, Ghostty, WezTerm, Warp, iTerm2), generated images and videos are displayed inline automatically. Image formats returned by models are preserved on disk and converted to PNG for terminal previews when needed. SVG previews use a 512-pixel long edge and an opaque white background. Video previews decode an H.264 keyframe from the midpoint of the video using [openh264](https://github.com/cisco/openh264) compiled to WebAssembly — no native dependencies required. `audio speak`, `audio sfx`, and `audio music` can also play generated audio and render a terminal waveform after saving. Use `--no-preview` for image/video previews, `--no-play` or `--no-waveform` for audio previews, or set `AI_CLI_PREVIEW=1` to force visual previews on in undetected terminals.
 
 ### Output Behavior
 
 - **decide**: the SDK evaluation result as JSON on stdout, including typed answers, usage, provider metadata, and response information
 - **text**: saves to `<id>.md` (interactive), stdout when piped
 - **image/video**: saves every artifact using its returned media type (PNG, WebP, SVG, MP4, WebM, etc.). A single artifact writes raw bytes when piped; multiple artifacts always use separate files. `--json` includes all artifacts, accompanying text, usage, warnings, responses, and provider metadata when available
-- **audio speak**: saves to `<id>.mp3` (interactive), raw binary stdout when piped
+- **audio speak/sfx/music**: saves to `<id>.mp3` (interactive), raw binary stdout when piped
 - **audio transcribe**: saves to `<id>.txt` (interactive), stdout when piped
 - **`-o <dir>`**: saves inside the directory with auto-generated names
 
@@ -604,6 +644,8 @@ When the CLI needs to choose a filename, it uses a response id when available an
 | `AI_CLI_IMAGE_MODEL` | Default image model (overrides `openai/gpt-image-2`) |
 | `AI_CLI_VIDEO_MODEL` | Default video model (overrides `bytedance/seedance-2.0`) |
 | `AI_CLI_SPEECH_MODEL` | Default speech model (overrides `openai/tts-1`) |
+| `AI_CLI_SFX_MODEL` | Default sound effect model (overrides `elevenlabs/sound-effects-v2`) |
+| `AI_CLI_MUSIC_MODEL` | Default music model (overrides `elevenlabs/music-v2.5`) |
 | `AI_CLI_TRANSCRIPTION_MODEL` | Default transcription model (overrides `openai/whisper-1`) |
 | `AI_CLI_EVALUATION_MODEL` | Default evaluation model (overrides `typesafe-ai/jev`) |
 | `AI_CLI_OUTPUT_DIR` | Default output directory for generated files |
@@ -624,9 +666,11 @@ Requests that exceed the timeout are aborted automatically:
 | `image` | 300 seconds |
 | `video` | 600 seconds |
 | `audio speak` | 120 seconds |
+| `audio sfx` | 120 seconds |
+| `audio music` | 600 seconds |
 | `audio transcribe` | 120 seconds |
 
-Use `--timeout <seconds>` to override the default for `text`, `image`, `video`, `audio speak`, `audio transcribe`, or `decide`. The value must be a positive integer. For example, `ai image --timeout 600 "a detailed sprite atlas"` allows the request to run for up to 10 minutes.
+Use `--timeout <seconds>` to override the default for `text`, `image`, `video`, `audio speak`, `audio sfx`, `audio music`, `audio transcribe`, or `decide`. The value must be a positive integer. For example, `ai image --timeout 600 "a detailed sprite atlas"` allows the request to run for up to 10 minutes.
 
 ### Exit Codes
 

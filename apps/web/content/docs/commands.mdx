@@ -281,10 +281,12 @@ ai text "summarize this" < notes.txt
 
 ## audio
 
-Generate speech from text or transcribe audio to text.
+Generate speech, sound effects, or music from a text prompt, or transcribe audio to text.
 
 ```bash
 ai audio speak "Hello from AI Gateway"
+ai audio sfx "a heavy wooden door slams shut"
+ai audio music "upbeat synthwave with a driving bassline" --length 30
 ai audio transcribe recording.mp3
 cat voice-note.mp3 | ai audio transcribe -o transcript.txt
 ```
@@ -293,7 +295,7 @@ cat voice-note.mp3 | ai audio transcribe -o transcript.txt
 
 <Properties>
   <Property name="-m, --model" type="string">
-    Speech model ID. Comma-separated for multi-model.
+    Speech model ID. Defaults to `openai/tts-1`. Comma-separated for multi-model.
   </Property>
   <Property name="-o, --output" type="path">
     Output file path or directory.
@@ -312,6 +314,9 @@ cat voice-note.mp3 | ai audio transcribe -o transcript.txt
   </Property>
   <Property name="--language" type="code">
     Language code, such as `en` or `fr`, or `auto`.
+  </Property>
+  <Property name="--provider-options" type="path">
+    JSON file of SDK providerOptions, including gateway routing.
   </Property>
   <Property name="-n, --count" type="number" default="1">
     Number of generations per model.
@@ -341,6 +346,120 @@ cat voice-note.mp3 | ai audio transcribe -o transcript.txt
 ```bash
 echo "Ship the changelog" | ai audio speak -o changelog.mp3
 cat announcement.txt | ai audio speak --format wav -o announcement.wav
+```
+
+### audio sfx
+
+<Properties>
+  <Property name="-m, --model" type="string">
+    Sound effect model ID. Defaults to `elevenlabs/sound-effects-v2`. Comma-separated for multi-model.
+  </Property>
+  <Property name="-o, --output" type="path">
+    Output file path or directory.
+  </Property>
+  <Property name="-f, --format" type="string" default="mp3">
+    Audio output format.
+  </Property>
+  <Property name="--duration" type="seconds">
+    Length from 0.5 to 30 seconds. Without it, the model chooses.
+  </Property>
+  <Property name="--loop" type="boolean">
+    Make the sound loop.
+  </Property>
+  <Property name="--prompt-influence" type="number">
+    How closely to follow the prompt, from 0 to 1.
+  </Property>
+  <Property name="--provider-options" type="path">
+    JSON file of SDK providerOptions, including gateway routing.
+  </Property>
+  <Property name="-n, --count" type="number" default="1">
+    Number of generations per model.
+  </Property>
+  <Property name="-p, --concurrency" type="number" default="4">
+    Max parallel generations.
+  </Property>
+  <Property name="--timeout" type="seconds" default="120">
+    Request timeout in seconds. Must be a positive integer.
+  </Property>
+  <Property name="-q, --quiet" type="boolean">
+    Suppress progress output.
+  </Property>
+  <Property name="--json" type="boolean">
+    Output metadata as JSON.
+  </Property>
+  <Property name="--no-play" type="boolean">
+    Disable audio playback after generation.
+  </Property>
+  <Property name="--no-waveform" type="boolean">
+    Disable accurate terminal waveform preview.
+  </Property>
+</Properties>
+
+`audio sfx` generates a sound effect from a description in an argument or stdin:
+
+```bash
+ai audio sfx "footsteps on gravel"
+ai audio sfx "steady rain on a tin roof" --duration 10 --loop -o rain.mp3
+```
+
+### audio music
+
+<Properties>
+  <Property name="-m, --model" type="string">
+    Music model ID. Defaults to `elevenlabs/music-v2.5`. Comma-separated for multi-model.
+  </Property>
+  <Property name="-o, --output" type="path">
+    Output file path or directory.
+  </Property>
+  <Property name="-f, --format" type="string" default="mp3">
+    Audio output format.
+  </Property>
+  <Property name="--length" type="seconds">
+    Length from 3 to 600 seconds. Without it, the model chooses.
+  </Property>
+  <Property name="--instrumental" type="boolean">
+    Generate music without vocals.
+  </Property>
+  <Property name="--provider-options" type="path">
+    JSON file of SDK providerOptions, including gateway routing.
+  </Property>
+  <Property name="-n, --count" type="number" default="1">
+    Number of generations per model.
+  </Property>
+  <Property name="-p, --concurrency" type="number" default="4">
+    Max parallel generations.
+  </Property>
+  <Property name="--timeout" type="seconds" default="600">
+    Request timeout in seconds. Must be a positive integer.
+  </Property>
+  <Property name="-q, --quiet" type="boolean">
+    Suppress progress output.
+  </Property>
+  <Property name="--json" type="boolean">
+    Output metadata as JSON.
+  </Property>
+  <Property name="--no-play" type="boolean">
+    Disable audio playback after generation.
+  </Property>
+  <Property name="--no-waveform" type="boolean">
+    Disable accurate terminal waveform preview.
+  </Property>
+</Properties>
+
+`audio music` composes a track from a description in an argument or stdin. Without `--length`, the model chooses the length, which can run to several minutes, and the Gateway bills music by the second:
+
+```bash
+ai audio music "lo-fi hip hop beat with warm piano" --length 30 --instrumental
+```
+
+`sfx` and `music` send their flags as ElevenLabs provider options and check each value against the provider's range before sending a request. A `--provider-options` file can set any other [ElevenLabs sound effect or music setting](https://ai-sdk.dev/providers/ai-sdk-providers/elevenlabs). When the file and a flag set the same option, the file wins, so this `sfx.json` makes the sound last 10 seconds:
+
+```json
+{ "elevenlabs": { "durationSeconds": 10 } }
+```
+
+```bash
+ai audio sfx "steady rain on a tin roof" --duration 5 --provider-options sfx.json
 ```
 
 ### audio transcribe
@@ -421,6 +540,7 @@ List available models from the AI Gateway, or show detailed info for one model.
 ```bash
 ai models
 ai models --type image
+ai models --type sfx
 ai models --type evaluation
 ai models --creator openai --json
 ai models claude-opus-4.6
@@ -440,8 +560,9 @@ ai models anthropic/claude-opus-4.6 --json
 ### Options
 
 <Properties>
-  <Property name="--type" type="text | image | video | audio | speech | transcription | evaluation">
-    Filter by modality (list mode only).
+  <Property name="--type" type="text | image | video | audio | speech | sfx | music | transcription | evaluation">
+    Filter by modality (list mode only). `audio` includes speech, sound effect,
+    music, and transcription models.
   </Property>
   <Property name="--creator" type="string">
     Filter by creator (e.g. `openai`, `google`) (list mode only).
@@ -469,9 +590,11 @@ Requests that exceed the per-command timeout are aborted automatically:
 | `image` | 300 seconds |
 | `video` | 600 seconds |
 | `audio speak` | 120 seconds |
+| `audio sfx` | 120 seconds |
+| `audio music` | 600 seconds |
 | `audio transcribe` | 120 seconds |
 
-Image and video generation use a longer timeout because models typically need more processing time.
+Image and video generation use a longer timeout because models typically need more processing time. `audio music` defaults to 600 seconds to match the `--length` maximum.
 
 Use `--timeout <seconds>` to allow a longer request without changing models. The value must be a positive integer:
 

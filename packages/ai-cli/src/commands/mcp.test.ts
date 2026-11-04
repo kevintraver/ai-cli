@@ -55,6 +55,31 @@ describe("toolArgv", () => {
     ).toEqual({
       argv: ["video", "start", "--output=op.json", "--no-generate-audio"],
     });
+    expect(
+      toolArgv(tools, "audio_sfx", {
+        prompt: "rain",
+        duration: "5",
+        loop: true,
+      })
+    ).toEqual({
+      argv: ["audio", "sfx", "rain", "--json", "--duration=5", "--loop"],
+    });
+    expect(
+      toolArgv(tools, "audio_music", {
+        prompt: "lo-fi",
+        length: "8",
+        instrumental: true,
+      })
+    ).toEqual({
+      argv: [
+        "audio",
+        "music",
+        "lo-fi",
+        "--json",
+        "--length=8",
+        "--instrumental",
+      ],
+    });
   });
 
   test("encodes decide questions as flags and state as stdin", () => {

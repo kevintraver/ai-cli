@@ -46,16 +46,17 @@ const pipingrows: readonly row[] = [
 const modelrows: readonly row[] = [
   { tone: "cmd", text: "$ ai models --type audio" },
   { tone: "dim", text: "" },
-  { tone: "dim", text: "Speech models (8):" },
-  { tone: "dim", text: "" },
+  { tone: "dim", text: "Speech models (21):" },
   { tone: "dim", text: "  openai" },
   { tone: "code", text: "    tts-1" },
-  { tone: "code", text: "    gpt-4o-mini-tts" },
   { tone: "dim", text: "" },
-  { tone: "dim", text: "Transcription models (4):" },
+  { tone: "dim", text: "Sound effect models (1):" },
+  { tone: "dim", text: "  elevenlabs" },
+  { tone: "code", text: "    sound-effects-v2" },
   { tone: "dim", text: "" },
-  { tone: "dim", text: "  openai" },
-  { tone: "code", text: "    whisper-1" },
+  { tone: "dim", text: "Music models (2):" },
+  { tone: "dim", text: "  elevenlabs" },
+  { tone: "code", text: "    music-v2.5" },
   { tone: "dim", text: "  ...and more" },
 ];
 
@@ -180,7 +181,7 @@ export function Features() {
           <Spotlight
             tone="iron"
             title="One key for every model type."
-            description="Vercel AI Gateway serves text, image, video, speech, transcription, and evaluation models from OpenAI, Anthropic, Google, Black Forest Labs, ByteDance, and more with one API key."
+            description="Vercel AI Gateway serves text, image, video, speech, sound effect, music, transcription, and evaluation models from OpenAI, Anthropic, Google, Black Forest Labs, ByteDance, ElevenLabs, and more with one API key."
             bullets={[
               "short names resolve automatically: flux-2-pro, gpt-5.5, tts-1",
               "live model listing from the gateway",

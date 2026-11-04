@@ -22,7 +22,28 @@ import {
   type ModelEntry,
 } from "../lib/models.js";
 
-type ModelFilter = Modality | "audio";
+const SECTIONS: { title: string; modality: Modality }[] = [
+  { title: "Text", modality: "text" },
+  { title: "Image", modality: "image" },
+  { title: "Video", modality: "video" },
+  { title: "Evaluation", modality: "evaluation" },
+  { title: "Speech", modality: "speech" },
+  { title: "Sound effect", modality: "sfx" },
+  { title: "Music", modality: "music" },
+  { title: "Transcription", modality: "transcription" },
+];
+
+const TYPE_FILTERS: Record<string, Modality[]> = {
+  text: ["text"],
+  image: ["image"],
+  video: ["video"],
+  audio: ["speech", "sfx", "music", "transcription"],
+  speech: ["speech"],
+  sfx: ["sfx"],
+  music: ["music"],
+  transcription: ["transcription"],
+  evaluation: ["evaluation"],
+};
 
 function groupByCreator(models: ModelEntry[]): Map<string, ModelEntry[]> {
   const groups = new Map<string, ModelEntry[]>();
@@ -170,7 +191,7 @@ export function registerModelsCommand(program: Command) {
     )
     .option(
       "--type <type>",
-      "Filter by type: text, image, video, audio, speech, transcription, evaluation"
+      `Filter by type: ${Object.keys(TYPE_FILTERS).join(", ")}`
     )
     .option("--creator <name>", "Filter by creator (e.g. openai, google)")
     .option("--json", "Output as JSON (includes native Gateway capabilities)");
@@ -194,34 +215,26 @@ export function registerModelsCommand(program: Command) {
         await showModelInfo(model, opts.json ?? false, catalogOptions);
         return;
       }
-      const validTypes = [
-        "text",
-        "image",
-        "video",
-        "audio",
-        "speech",
-        "transcription",
-        "evaluation",
-      ];
-      const filterType = opts.type?.toLowerCase() as ModelFilter | undefined;
-      if (filterType && !validTypes.includes(filterType)) {
+      const filterType = opts.type?.toLowerCase();
+      if (
+        filterType !== undefined &&
+        !Object.hasOwn(TYPE_FILTERS, filterType)
+      ) {
         process.stderr.write(
-          `Error: --type must be one of: ${validTypes.join(", ")} (got "${opts.type}")\n`
+          `Error: --type must be one of: ${Object.keys(TYPE_FILTERS).join(", ")} (got "${opts.type}")\n`
         );
         process.exit(1);
       }
+      const modalities = filterType ? TYPE_FILTERS[filterType] : undefined;
       const filterCreator = opts.creator?.toLowerCase();
 
       const gatewayModels = await fetchGatewayModels(catalogOptions);
 
       if (opts.json) {
         let entries = gatewayModels.all;
-        if (filterType) {
+        if (modalities) {
           entries = entries.filter((m) =>
-            filterType === "audio"
-              ? m.capabilities.includes("speech") ||
-                m.capabilities.includes("transcription")
-              : m.capabilities.includes(filterType)
+            m.capabilities.some((capability) => modalities.includes(capability))
           );
         }
         if (filterCreator) {
@@ -242,29 +255,12 @@ export function registerModelsCommand(program: Command) {
         return;
       }
 
-      const sections: { title: string; entries: ModelEntry[] }[] = [];
-      if (!filterType || filterType === "text")
-        sections.push({ title: "Text", entries: gatewayModels.text });
-      if (!filterType || filterType === "image")
-        sections.push({ title: "Image", entries: gatewayModels.image });
-      if (!filterType || filterType === "video")
-        sections.push({ title: "Video", entries: gatewayModels.video });
-      if (!filterType || filterType === "evaluation")
-        sections.push({
-          title: "Evaluation",
-          entries: gatewayModels.evaluation,
-        });
-      if (!filterType || filterType === "audio" || filterType === "speech")
-        sections.push({ title: "Speech", entries: gatewayModels.speech });
-      if (
-        !filterType ||
-        filterType === "audio" ||
-        filterType === "transcription"
-      )
-        sections.push({
-          title: "Transcription",
-          entries: gatewayModels.transcription,
-        });
+      const sections = SECTIONS.filter(
+        ({ modality }) => !modalities || modalities.includes(modality)
+      ).map(({ title, modality }) => ({
+        title,
+        entries: gatewayModels[modality],
+      }));
 
       let totalCount = 0;
       for (const section of sections) {

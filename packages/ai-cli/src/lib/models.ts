@@ -3,6 +3,8 @@ export type Modality =
   | "image"
   | "video"
   | "speech"
+  | "sfx"
+  | "music"
   | "transcription"
   | "evaluation";
 
@@ -11,6 +13,8 @@ const DEFAULTS: Record<Modality, string> = {
   image: process.env.AI_CLI_IMAGE_MODEL ?? "openai/gpt-image-2",
   video: process.env.AI_CLI_VIDEO_MODEL ?? "bytedance/seedance-2.0",
   speech: process.env.AI_CLI_SPEECH_MODEL ?? "openai/tts-1",
+  sfx: process.env.AI_CLI_SFX_MODEL ?? "elevenlabs/sound-effects-v2",
+  music: process.env.AI_CLI_MUSIC_MODEL ?? "elevenlabs/music-v2.5",
   transcription: process.env.AI_CLI_TRANSCRIPTION_MODEL ?? "openai/whisper-1",
   evaluation: process.env.AI_CLI_EVALUATION_MODEL ?? "typesafe-ai/jev",
 };
@@ -65,14 +69,8 @@ export interface ModelEntry {
   tags?: string[];
 }
 
-export interface GatewayModels {
+export interface GatewayModels extends Record<Modality, ModelEntry[]> {
   available: boolean;
-  text: ModelEntry[];
-  image: ModelEntry[];
-  video: ModelEntry[];
-  speech: ModelEntry[];
-  transcription: ModelEntry[];
-  evaluation: ModelEntry[];
   /** Models with a modality supported by the CLI. */
   all: ModelEntry[];
   /** Every gateway model, including types the CLI cannot generate with
@@ -106,6 +104,8 @@ function emptyGatewayModels(): GatewayModels {
     image: [],
     video: [],
     speech: [],
+    sfx: [],
+    music: [],
     transcription: [],
     evaluation: [],
     all: [],
@@ -194,7 +194,7 @@ async function doFetch(options?: {
           capabilities.push("video");
           break;
         case "speech":
-          capabilities.push("speech");
+          capabilities.push(speechModality(tags));
           break;
         case "transcription":
           capabilities.push("transcription");
@@ -228,13 +228,7 @@ async function doFetch(options?: {
 
       entryMap.set(m.id, entry);
 
-      if (capabilities.includes("text")) result.text.push(entry);
-      if (capabilities.includes("image")) result.image.push(entry);
-      if (capabilities.includes("video")) result.video.push(entry);
-      if (capabilities.includes("speech")) result.speech.push(entry);
-      if (capabilities.includes("transcription"))
-        result.transcription.push(entry);
-      if (capabilities.includes("evaluation")) result.evaluation.push(entry);
+      for (const capability of capabilities) result[capability].push(entry);
 
       if (m.type === "language" && isImageGen) {
         result.languageImageModelIds.add(m.id);
@@ -251,6 +245,13 @@ async function doFetch(options?: {
   }
 
   return result;
+}
+
+/** The Gateway serves sound effect and music models as speech models, told apart by tag. */
+function speechModality(tags: string[]): Modality {
+  if (tags.includes("sound-effects")) return "sfx";
+  if (tags.includes("music")) return "music";
+  return "speech";
 }
 
 export async function fetchModelEndpoints(

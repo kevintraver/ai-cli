@@ -14,7 +14,7 @@ Use when you need to:
 - Generate images from text prompts or existing images
 - Generate video from text prompts or images
 - Generate text (summaries, explanations, code reviews) from prompts or piped content
-- Generate speech from text or transcribe audio files and streams
+- Generate speech, sound effects, or music, or transcribe audio files and streams
 - Compare outputs across multiple models side-by-side
 - Ask Boolean, Choice, and Score questions using AI SDK evaluation models
 - Build composable media pipelines by chaining commands via stdin/stdout
@@ -32,14 +32,22 @@ ai video "a spinning triangle"           # generate a video
 ai video start "a spinning triangle" -o operation.json  # submit a video job
 ai video status operation.json --download -o ./clips/    # check and download it
 ai audio speak "hello"                   # generate speech
+ai audio sfx "door slam" --duration 2    # generate a sound effect (0.5-30 s)
+ai audio music "lo-fi beat" --length 30  # generate music (3-600 s)
 ai audio transcribe recording.mp3        # transcribe audio
-ai models --type audio                   # list speech and transcription models
+ai models --type audio                   # list speech, sfx, music, and transcription models
 ai mcp --profile core                    # start MCP server
 ```
 
 Agents can use MCP tools instead of shelling out: `text`, `image`,
 `decide`, and `models`. The media profile adds `video_start`,
-`video_status`, `audio_speak`, and `audio_transcribe`.
+`video_status`, `audio_speak`, `audio_sfx`, `audio_music`, and
+`audio_transcribe`.
+
+`audio sfx` takes `--duration <seconds>`, `--loop`, and
+`--prompt-influence <0-1>`. `audio music` takes `--length <seconds>` and
+`--instrumental`. Always pass `--length` to `audio music`: without it the model
+picks the length, which can run to several minutes, and music is billed per second.
 
 ## Key Flags
 
@@ -324,7 +332,8 @@ video outputs are saved separately and can be read from the JSON manifest.
 - text: 120 seconds
 - image: 300 seconds
 - video: 600 seconds
-- audio speak: 120 seconds
+- audio speak and sfx: 120 seconds
+- audio music: 600 seconds
 - audio transcribe: 120 seconds
 
 Override with `--timeout <seconds>` when a prompt legitimately needs longer, instead of dropping to a faster model variant that changes the output:

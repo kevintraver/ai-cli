@@ -9,14 +9,29 @@ export function parsePositiveInt(value: string, name: string): number {
   return n;
 }
 
+function isUnsignedDecimal(value: string): boolean {
+  return /^(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(value);
+}
+
 export function parseNonNegativeFloat(value: string, name: string): number {
   const n = Number(value);
-  if (
-    !/^(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(value) ||
-    !Number.isFinite(n) ||
-    n < 0
-  ) {
+  if (!isUnsignedDecimal(value) || !Number.isFinite(n) || n < 0) {
     throw new Error(`--${name} must be a non-negative number, got "${value}"`);
+  }
+  return n;
+}
+
+export function parseNumberInRange(
+  value: string,
+  name: string,
+  min: number,
+  max: number
+): number {
+  const n = Number(value);
+  if (!isUnsignedDecimal(value) || !(n >= min && n <= max)) {
+    throw new Error(
+      `--${name} must be a number from ${min} to ${max}, got "${value}"`
+    );
   }
   return n;
 }
@@ -49,12 +64,7 @@ export function parseAspectRatio(value: string): `${number}:${number}` {
 
 export function parseTemperature(value: string): number {
   const n = Number(value);
-  if (
-    !/^(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(value) ||
-    !Number.isFinite(n) ||
-    n < 0 ||
-    n > 2
-  ) {
+  if (!isUnsignedDecimal(value) || !Number.isFinite(n) || n < 0 || n > 2) {
     throw new Error(`--temperature must be between 0 and 2, got "${value}"`);
   }
   return n;

@@ -53,10 +53,11 @@ takes precedence over that image, as in the SDK.
 
 ### Audio
 
-`audio speak` reads stdin as text. `audio transcribe` reads stdin as binary audio:
+`audio speak` reads stdin as text, and `audio sfx` and `audio music` read it as a prompt. `audio transcribe` reads stdin as binary audio:
 
 ```bash
 echo "Ship the changelog" | ai audio speak -o changelog.mp3
+echo "thunder rolling in the distance" | ai audio sfx -o thunder.mp3
 cat recording.mp3 | ai audio transcribe -o transcript.txt
 ```
 

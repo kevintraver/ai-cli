@@ -9,15 +9,30 @@ import { generateSpeech, transcribe } from "ai";
 import { previewAudioOutputs } from "../lib/audio-preview.js";
 import type { Command } from "../lib/command.js";
 import { buildJobs, runJobs } from "../lib/jobs.js";
-import { fetchGatewayModels, resolveModels } from "../lib/models.js";
+import {
+  addProviderOptionsOption,
+  mergeOptions,
+  readProviderOptions,
+  type ProviderOptions,
+} from "../lib/media-options.js";
+import {
+  fetchGatewayModels,
+  resolveModels,
+  type Modality,
+} from "../lib/models.js";
 import type { OutputFormat } from "../lib/output.js";
-import { parseNonNegativeFloat, parsePositiveInt } from "../lib/parse.js";
+import {
+  parseNonNegativeFloat,
+  parseNumberInRange,
+  parsePositiveInt,
+} from "../lib/parse.js";
 import { responseIdFromHeaders } from "../lib/response-id.js";
 import { readStdin, stdinAsText } from "../lib/stdin.js";
 import { addTimeoutOption, timeoutMs } from "../lib/timeout.js";
 
 const DEFAULT_CONCURRENCY = 4;
 const DEFAULT_TIMEOUT_MS = 120_000;
+const MUSIC_TIMEOUT_MS = 600_000;
 const DEFAULT_AUDIO_FORMAT = "mp3";
 const KNOWN_AUDIO_FORMATS = new Set([
   "mp3",
@@ -28,7 +43,7 @@ const KNOWN_AUDIO_FORMATS = new Set([
   "pcm",
 ]);
 
-interface SpeakOptions {
+interface AudioOptions {
   model?: string;
   output?: string;
   format?: string;
@@ -36,6 +51,12 @@ interface SpeakOptions {
   instructions?: string;
   speed?: string;
   language?: string;
+  duration?: string;
+  loop?: boolean;
+  promptInfluence?: string;
+  length?: string;
+  instrumental?: boolean;
+  providerOptions?: string;
   count?: string;
   concurrency?: string;
   quiet?: boolean;
@@ -44,6 +65,101 @@ interface SpeakOptions {
   waveform?: boolean;
   timeout: number;
 }
+
+type AudioRequest = Pick<
+  Parameters<typeof generateSpeech>[0],
+  "voice" | "instructions" | "speed" | "language"
+> & { providerOptions: ProviderOptions };
+
+interface AudioKind {
+  name: string;
+  description: string;
+  input: string;
+  inputDescription: string;
+  modality: Extract<Modality, "speech" | "sfx" | "music">;
+  defaultTimeoutMs: number;
+  addOptions: (command: Command) => Command;
+  request: (opts: AudioOptions) => AudioRequest;
+}
+
+const AUDIO_KINDS: AudioKind[] = [
+  {
+    name: "speak",
+    description: "Generate speech audio from text",
+    input: "text",
+    inputDescription: "Text to convert to speech",
+    modality: "speech",
+    defaultTimeoutMs: DEFAULT_TIMEOUT_MS,
+    addOptions: (command) =>
+      command
+        .option("--voice <voice>", "Voice to use for speech generation")
+        .option("--instructions <text>", "Instructions for speech generation")
+        .option("--speed <n>", "Speech speed")
+        .option("--language <code>", "Language code (e.g. en, fr) or auto"),
+    request: (opts) => ({
+      voice: opts.voice,
+      instructions: opts.instructions,
+      speed: opts.speed
+        ? parseNonNegativeFloat(opts.speed, "speed")
+        : undefined,
+      language: opts.language,
+      providerOptions: {},
+    }),
+  },
+  {
+    name: "sfx",
+    description: "Generate a sound effect from a prompt",
+    input: "prompt",
+    inputDescription: "Description of the sound effect",
+    modality: "sfx",
+    defaultTimeoutMs: DEFAULT_TIMEOUT_MS,
+    addOptions: (command) =>
+      command
+        .option(
+          "--duration <seconds>",
+          "Length in seconds, 0.5 to 30 (default: model chooses)"
+        )
+        .option("--loop", "Make the sound loop")
+        .option(
+          "--prompt-influence <n>",
+          "How closely to follow the prompt, 0 to 1"
+        ),
+    request: (opts) => ({
+      providerOptions: elevenLabsOptions({
+        durationSeconds: opts.duration
+          ? parseNumberInRange(opts.duration, "duration", 0.5, 30)
+          : undefined,
+        loop: opts.loop || undefined,
+        promptInfluence: opts.promptInfluence
+          ? parseNumberInRange(opts.promptInfluence, "prompt-influence", 0, 1)
+          : undefined,
+      }),
+    }),
+  },
+  {
+    name: "music",
+    description: "Generate music from a prompt",
+    input: "prompt",
+    inputDescription: "Description of the music",
+    modality: "music",
+    defaultTimeoutMs: MUSIC_TIMEOUT_MS,
+    addOptions: (command) =>
+      command
+        .option(
+          "--length <seconds>",
+          "Length in seconds, 3 to 600 (default: model chooses)"
+        )
+        .option("--instrumental", "Generate music without vocals"),
+    request: (opts) => ({
+      providerOptions: elevenLabsOptions({
+        musicLengthMs: opts.length
+          ? Math.round(parseNumberInRange(opts.length, "length", 3, 600) * 1000)
+          : undefined,
+        forceInstrumental: opts.instrumental || undefined,
+      }),
+    }),
+  },
+];
 
 interface TranscribeOptions {
   model?: string;
@@ -59,101 +175,11 @@ interface TranscribeOptions {
 export function registerAudioCommand(program: Command) {
   const audio = program
     .command("audio")
-    .description("Generate speech or transcribe audio");
+    .description(
+      "Generate speech, sound effects, or music, or transcribe audio"
+    );
 
-  const speak = audio
-    .command("speak")
-    .description("Generate speech audio from text")
-    .argument("[text]", "Text to convert to speech")
-    .option(
-      "-m, --model <model>",
-      "Speech model ID (creator/model-name), comma-separated for multi-model"
-    )
-    .option("-o, --output <path>", "Output file path or directory")
-    .option("-f, --format <fmt>", "Audio output format (default: mp3)")
-    .option("--voice <voice>", "Voice to use for speech generation")
-    .option("--instructions <text>", "Instructions for speech generation")
-    .option("--speed <n>", "Speech speed")
-    .option("--language <code>", "Language code (e.g. en, fr) or auto")
-    .option("-n, --count <n>", "Number of generations per model (default: 1)")
-    .option(
-      "-p, --concurrency <n>",
-      `Max parallel generations (default: ${DEFAULT_CONCURRENCY})`
-    )
-    .option("-q, --quiet", "Suppress progress output")
-    .option("--json", "Output metadata as JSON")
-    .option("--no-play", "Disable audio playback after generation")
-    .option("--no-waveform", "Disable accurate terminal waveform preview");
-  addTimeoutOption(speak, DEFAULT_TIMEOUT_MS).action(
-    async (rawText: string | undefined, opts: SpeakOptions) => {
-      const text = rawText?.trim() || undefined;
-      const stdin = await readStdin();
-      const stdinText = stdin ? stdinAsText(stdin).trim() : undefined;
-      const speechText = buildSpeechText(text, stdinText);
-
-      if (!speechText) {
-        process.stderr.write(
-          "Error: text or stdin is required (provide text or pipe text via stdin)\n"
-        );
-        process.exit(1);
-      }
-
-      const outputFormat = resolveAudioFormat(opts.format, opts.output);
-      const speed = opts.speed
-        ? parseNonNegativeFloat(opts.speed, "speed")
-        : undefined;
-      const gatewayModels = await fetchGatewayModels();
-      const models = resolveModels("speech", opts.model, gatewayModels.speech);
-      const countPerModel = opts.count
-        ? parsePositiveInt(opts.count, "count")
-        : 1;
-      const jobs = buildJobs(models, countPerModel);
-      const previewAudio = shouldPreviewAudio(opts);
-
-      const { total, failed } = await runJobs(
-        jobs,
-        async (modelId) => {
-          const abort = AbortSignal.timeout(timeoutMs(opts.timeout));
-          const result = await generateSpeech({
-            headers: gatewayHeaders(),
-            model: gateway.speechModel(modelId),
-            text: speechText,
-            voice: opts.voice ?? defaultVoiceForModel(modelId),
-            outputFormat,
-            instructions: opts.instructions,
-            speed,
-            language: opts.language,
-            abortSignal: abort,
-          });
-          return {
-            data: Buffer.from(result.audio.uint8Array),
-            id: responseIdFromHeaders(result.responses[0]?.headers),
-          };
-        },
-        {
-          noun: "audio",
-          format: "audio",
-          extension: extensionForAudioFormat(outputFormat),
-          outputPath: opts.output,
-          quiet: opts.quiet,
-          json: opts.json,
-          concurrency: opts.concurrency
-            ? parsePositiveInt(opts.concurrency, "concurrency")
-            : DEFAULT_CONCURRENCY,
-          afterOutputs: previewAudio
-            ? (outputs) =>
-                previewAudioOutputs(outputs, {
-                  play: opts.play !== false,
-                  waveform: opts.waveform !== false,
-                  quiet: opts.quiet,
-                })
-            : undefined,
-        }
-      );
-      if (failed === total) process.exit(1);
-      if (failed > 0) process.exit(2);
-    }
-  );
+  for (const kind of AUDIO_KINDS) registerGenerateCommand(audio, kind);
 
   const transcribeCommand = audio
     .command("transcribe")
@@ -238,10 +264,120 @@ export function registerAudioCommand(program: Command) {
   );
 }
 
-function buildSpeechText(
-  text?: string,
-  stdinText?: string
-): string | undefined {
+function registerGenerateCommand(audio: Command, kind: AudioKind) {
+  const command = kind.addOptions(
+    audio
+      .command(kind.name)
+      .description(kind.description)
+      .argument(`[${kind.input}]`, kind.inputDescription)
+      .option(
+        "-m, --model <model>",
+        "Model ID (creator/model-name), comma-separated for multi-model"
+      )
+      .option("-o, --output <path>", "Output file path or directory")
+      .option("-f, --format <fmt>", "Audio output format (default: mp3)")
+  );
+  addProviderOptionsOption(command)
+    .option("-n, --count <n>", "Number of generations per model (default: 1)")
+    .option(
+      "-p, --concurrency <n>",
+      `Max parallel generations (default: ${DEFAULT_CONCURRENCY})`
+    )
+    .option("-q, --quiet", "Suppress progress output")
+    .option("--json", "Output metadata as JSON")
+    .option("--no-play", "Disable audio playback after generation")
+    .option("--no-waveform", "Disable accurate terminal waveform preview");
+  addTimeoutOption(command, kind.defaultTimeoutMs).action(
+    (input: string | undefined, opts: AudioOptions) =>
+      generateAudio(kind, input, opts)
+  );
+}
+
+async function generateAudio(
+  kind: AudioKind,
+  rawInput: string | undefined,
+  opts: AudioOptions
+) {
+  const stdin = await readStdin();
+  const stdinText = stdin ? stdinAsText(stdin).trim() : undefined;
+  const input = joinInput(rawInput?.trim() || undefined, stdinText);
+
+  if (!input) {
+    process.stderr.write(
+      `Error: ${kind.input} or stdin is required (provide ${kind.input} or pipe ${kind.input} via stdin)\n`
+    );
+    process.exit(1);
+  }
+
+  const outputFormat = resolveAudioFormat(opts.format, opts.output);
+  const { providerOptions: flagOptions, ...speech } = kind.request(opts);
+  const providerOptions = mergeOptions(
+    flagOptions,
+    await readProviderOptions(opts.providerOptions)
+  ) as ProviderOptions;
+  const gatewayModels = await fetchGatewayModels();
+  const models = resolveModels(
+    kind.modality,
+    opts.model,
+    gatewayModels[kind.modality]
+  );
+  const countPerModel = opts.count ? parsePositiveInt(opts.count, "count") : 1;
+  const jobs = buildJobs(models, countPerModel);
+  const previewAudio = shouldPreviewAudio(opts);
+
+  const { total, failed } = await runJobs(
+    jobs,
+    async (modelId) => {
+      const abort = AbortSignal.timeout(timeoutMs(opts.timeout));
+      const result = await generateSpeech({
+        headers: gatewayHeaders(),
+        model: gateway.speechModel(modelId),
+        text: input,
+        ...speech,
+        voice: speech.voice ?? defaultVoiceForModel(modelId),
+        outputFormat,
+        providerOptions,
+        abortSignal: abort,
+      });
+      return {
+        data: Buffer.from(result.audio.uint8Array),
+        id: responseIdFromHeaders(result.responses[0]?.headers),
+      };
+    },
+    {
+      noun: "audio",
+      format: "audio",
+      extension: extensionForAudioFormat(outputFormat),
+      outputPath: opts.output,
+      quiet: opts.quiet,
+      json: opts.json,
+      concurrency: opts.concurrency
+        ? parsePositiveInt(opts.concurrency, "concurrency")
+        : DEFAULT_CONCURRENCY,
+      afterOutputs: previewAudio
+        ? (outputs) =>
+            previewAudioOutputs(outputs, {
+              play: opts.play !== false,
+              waveform: opts.waveform !== false,
+              quiet: opts.quiet,
+            })
+        : undefined,
+    }
+  );
+  if (failed === total) process.exit(1);
+  if (failed > 0) process.exit(2);
+}
+
+function elevenLabsOptions(
+  options: Record<string, number | boolean | undefined>
+): ProviderOptions {
+  const defined = Object.fromEntries(
+    Object.entries(options).filter(([, value]) => value !== undefined)
+  ) as Record<string, number | boolean>;
+  return Object.keys(defined).length > 0 ? { elevenlabs: defined } : {};
+}
+
+function joinInput(text?: string, stdinText?: string): string | undefined {
   if (stdinText && text) return `${stdinText}\n\n${text}`;
   return stdinText || text;
 }
@@ -269,7 +405,7 @@ export function resolveAudioFormat(
 }
 
 export function shouldPreviewAudio(
-  opts: Pick<SpeakOptions, "json" | "output" | "play" | "waveform" | "quiet">,
+  opts: Pick<AudioOptions, "json" | "output" | "play" | "waveform" | "quiet">,
   stdoutIsTTY = Boolean(process.stdout.isTTY),
   stderrIsTTY = Boolean(process.stderr.isTTY),
   envOutputDir = process.env.AI_CLI_OUTPUT_DIR

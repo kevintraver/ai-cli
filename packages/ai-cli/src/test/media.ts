@@ -41,6 +41,9 @@ globalThis.fetch = async (url, init) => {
       ...(mode === 'partial' ? [{ id: 'test/fail', type: 'image' }] : []),
       { id: 'openai/gpt-image-2', type: 'image' },
       { id: 'openai/gpt-5.5', type: 'language' },
+      { id: 'openai/tts-1', type: 'speech' },
+      { id: 'elevenlabs/sound-effects-v2', type: 'speech', tags: ['sound-effects'] },
+      { id: 'elevenlabs/music-v2.5', type: 'speech', tags: ['music'] },
       { id: 'google/gemini-3-pro-image', type: 'language', owned_by: 'google', tags: ['image-generation'] },
       ...(mode === 'arrow-catalog' ? [
         { id: 'quiverai/arrow-2', type: 'language' },
@@ -61,6 +64,7 @@ globalThis.fetch = async (url, init) => {
     providerMetadata: { openai: { images: Array.from({ length: count }, () => ({ revisedPrompt: 'revised' })) }, gateway: { cost: '0.123' } }
   }, { headers: { 'x-request-id': 'image-id' } });
   }
+  if (route.endsWith('/speech-model')) return Response.json({ audio: Buffer.from('ID3audio').toString('base64'), warnings: [] }, { headers: { 'x-request-id': 'speech-id' } });
   if (route.endsWith('/language-model') && mode === 'partial-text-batch' && ++textCalls === 2) return Response.json({ error: { message: 'one text call failed' } }, { status: 503 });
   if (route.endsWith('/language-model')) {
     const respond = () => Response.json({

@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import {
   parsePositiveInt,
   parseNonNegativeFloat,
+  parseNumberInRange,
   parseSize,
   parseAspectRatio,
   parseTemperature,
@@ -64,6 +65,23 @@ describe("parseNonNegativeFloat", () => {
       "--temperature"
     );
   });
+});
+
+describe("parseNumberInRange", () => {
+  test("accepts values inside the range, including the bounds", () => {
+    expect(parseNumberInRange("0.5", "duration", 0.5, 30)).toBe(0.5);
+    expect(parseNumberInRange("12", "duration", 0.5, 30)).toBe(12);
+    expect(parseNumberInRange("30", "duration", 0.5, 30)).toBe(30);
+  });
+
+  test.each(["0.4", "31", "-1", "abc", "", "1e999"])(
+    "reports the range for %j",
+    (value) => {
+      expect(() => parseNumberInRange(value, "duration", 0.5, 30)).toThrow(
+        "--duration must be a number from 0.5 to 30"
+      );
+    }
+  );
 });
 
 describe("parseSize", () => {

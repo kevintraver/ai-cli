@@ -187,6 +187,22 @@ export const TOOL_OVERRIDES: Record<string, ToolOverride> = {
     hint: "Returns JSON metadata with saved file paths; without output files are written to cwd (or AI_CLI_OUTPUT_DIR). Useful extraArgs: --format, --speed.",
     required: ["text"],
   },
+  audio_sfx: {
+    path: ["audio", "sfx"],
+    profile: "media",
+    json: true,
+    annotations: WRITES,
+    hint: "Returns JSON metadata with saved file paths; without output files are written to cwd (or AI_CLI_OUTPUT_DIR). Set duration for a fixed length and loop for background audio.",
+    required: ["prompt"],
+  },
+  audio_music: {
+    path: ["audio", "music"],
+    profile: "media",
+    json: true,
+    annotations: WRITES,
+    hint: "Returns JSON metadata with saved file paths; without output files are written to cwd (or AI_CLI_OUTPUT_DIR). Set length to control cost: without it the model picks a length, often minutes.",
+    required: ["prompt"],
+  },
   audio_transcribe: {
     path: ["audio", "transcribe"],
     profile: "media",

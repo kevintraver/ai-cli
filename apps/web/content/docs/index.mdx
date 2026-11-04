@@ -11,11 +11,11 @@ Generate anything from your terminal. Create text, images, video, and audio, and
   <Card title="Image generation" description="Create images from text or existing images." />
   <Card title="Video generation" description="Generate video from text or images." />
   <Card title="Text generation" description="Generate text from prompts with any language model." />
-  <Card title="Audio generation" description="Generate speech or transcribe audio files and streams." />
+  <Card title="Audio generation" description="Generate speech, sound effects, and music, or transcribe audio files and streams." />
   <Card title="Multi-model comparison" description="Run the same prompt across multiple models in parallel." />
   <Card title="Decisions" description="Use AI SDK evaluation models with typed questions and JSON results." href="/docs/decide" />
   <Card title="Stdin piping" description="Pipe any content in and out for composable workflows." />
-  <Card title="Inline preview" description="See generated images, video frames, and speech playback directly in your terminal." />
+  <Card title="Inline preview" description="See generated images, video frames, and audio playback directly in your terminal." />
 </Cards>
 
 ## Quick start
@@ -43,6 +43,7 @@ Generate anything from your terminal. Create text, images, video, and audio, and
     ai video "a spinning triangle"
     ai text "explain quantum computing"
     ai audio speak "Thanks for trying ai-cli"
+    ai audio sfx "rain on a tin roof" --duration 5 --loop
     ai audio transcribe recording.mp3
     ```
   </Step>
@@ -54,7 +55,7 @@ Generate anything from your terminal. Create text, images, video, and audio, and
   <Card title="image" description="Generate images from a prompt." href="/docs/commands#image" />
   <Card title="video" description="Generate video from text or start/end frames." href="/docs/commands#video" />
   <Card title="text" description="Generate text from a prompt." href="/docs/commands#text" />
-  <Card title="audio" description="Generate speech or transcribe audio." href="/docs/commands#audio" />
+  <Card title="audio" description="Generate speech, sound effects, or music, or transcribe audio." href="/docs/commands#audio" />
   <Card title="decide" description="Make decisions with named typed questions against shared stdin." href="/docs/decide" />
   <Card title="models" description="List available models from the gateway." href="/docs/commands#models" />
   <Card title="mcp" description="Run every command as a typed tool over a stdio MCP server." href="/docs/mcp" />

@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 
 import { createGateway } from "@ai-sdk/gateway";
-import type { generateImage } from "ai";
+import type { JSONValue } from "ai";
 
 import type { Command } from "./command.js";
 import {
@@ -9,6 +9,8 @@ import {
   parseNonNegativeInt,
   parsePositiveInt,
 } from "./parse.js";
+
+export type ProviderOptions = Record<string, Record<string, JSONValue>>;
 
 export interface MediaOptions {
   model?: string;
@@ -46,28 +48,33 @@ export function addGatewayOptions(command: Command): Command {
   );
 }
 
+export function addProviderOptionsOption(command: Command): Command {
+  return command.option(
+    "--provider-options <path>",
+    "JSON file of SDK providerOptions, including gateway routing"
+  );
+}
+
 export function addMediaOptions(
   command: Command,
   concurrency: number,
   start = false
 ): Command {
-  const common = addGatewayOptions(command)
-    .option(
-      "-m, --model <model>",
-      "Model ID, comma-separated for multiple models"
-    )
-    .option(
-      "-o, --output <path>",
-      start
-        ? "Persist operation JSON to this file (also printed to stdout)"
-        : "Output file or directory (use a trailing / for a new directory)"
-    )
-    .option("-n, --n <n>", "SDK number of outputs per model (default: 1)")
-    .option("--seed <integer>", "SDK generation seed, including 0")
-    .option(
-      "--provider-options <path>",
-      "JSON file of SDK providerOptions, including gateway routing"
-    )
+  const common = addProviderOptionsOption(
+    addGatewayOptions(command)
+      .option(
+        "-m, --model <model>",
+        "Model ID, comma-separated for multiple models"
+      )
+      .option(
+        "-o, --output <path>",
+        start
+          ? "Persist operation JSON to this file (also printed to stdout)"
+          : "Output file or directory (use a trailing / for a new directory)"
+      )
+      .option("-n, --n <n>", "SDK number of outputs per model (default: 1)")
+      .option("--seed <integer>", "SDK generation seed, including 0")
+  )
     .option("-q, --quiet", "Suppress progress; errors remain visible")
     .option(
       "--json",
@@ -111,6 +118,19 @@ export async function readJsonObject(
   return value;
 }
 
+export async function readProviderOptions(
+  path: string | undefined
+): Promise<ProviderOptions> {
+  if (!path) return {};
+  const options = await readJsonObject(path, "provider-options");
+  if (!Object.values(options).every(isObject)) {
+    throw new Error(
+      "--provider-options must map provider names to JSON objects"
+    );
+  }
+  return options as ProviderOptions;
+}
+
 export function validateUrl(value: string, name: string): string {
   let url: URL;
   try {
@@ -132,9 +152,7 @@ export async function mediaSettings(
   seed: number | undefined;
   maxRetries: number | undefined;
   concurrency: number;
-  providerOptions: NonNullable<
-    Parameters<typeof generateImage>[0]["providerOptions"]
-  >;
+  providerOptions: ProviderOptions;
   headers: Record<string, string>;
   catalogOptions: {
     baseURL: string | undefined;
@@ -171,17 +189,7 @@ export async function mediaSettings(
   for (const [name, value] of Object.entries(customHeaders))
     normalizedHeaders.set(name, value as string);
   const headers = Object.fromEntries(normalizedHeaders);
-  const rawOptions = opts.providerOptions
-    ? await readJsonObject(opts.providerOptions, "provider-options")
-    : {};
-  if (!Object.values(rawOptions).every(isObject)) {
-    throw new Error(
-      "--provider-options must map provider names to JSON objects"
-    );
-  }
-  const providerOptions = rawOptions as NonNullable<
-    Parameters<typeof generateImage>[0]["providerOptions"]
-  >;
+  const providerOptions = await readProviderOptions(opts.providerOptions);
   const teamIdOrSlug =
     opts.scope ??
     opts.teamIdOrSlug ??

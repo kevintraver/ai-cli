@@ -201,6 +201,8 @@ describe("cli integration", () => {
     const { exitCode, stdout } = await run("audio", "--help");
     expect(exitCode).toBe(0);
     expect(stdout).toContain("speak");
+    expect(stdout).toContain("sfx");
+    expect(stdout).toContain("music");
     expect(stdout).toContain("transcribe");
   });
 
@@ -225,6 +227,20 @@ describe("cli integration", () => {
     expect(stdout).toContain("--no-waveform");
   });
 
+  test.each([
+    [
+      "sfx",
+      ["--duration", "--loop", "--prompt-influence", "--provider-options"],
+    ],
+    ["music", ["--length", "--instrumental", "--provider-options"]],
+  ])("audio %s --help lists its flags", async (command, flags) => {
+    const { exitCode, stdout } = await run("audio", command, "--help");
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain(`Usage: ai audio ${command} [options] [prompt]`);
+    for (const flag of flags) expect(stdout).toContain(flag);
+    expect(stdout).not.toContain("--voice");
+  });
+
   test("audio transcribe --help exits 0 and lists flags", async () => {
     const { exitCode, stdout } = await run("audio", "transcribe", "--help");
     expect(exitCode).toBe(0);
@@ -238,6 +254,8 @@ describe("cli integration", () => {
     [["image"], "300"],
     [["video"], "600"],
     [["audio", "speak"], "120"],
+    [["audio", "sfx"], "120"],
+    [["audio", "music"], "600"],
     [["audio", "transcribe"], "120"],
   ])("%s --help lists --timeout with its default", async (command, seconds) => {
     const { exitCode, stdout } = await run(...command, "--help");
@@ -262,6 +280,15 @@ describe("cli integration", () => {
     expect(exitCode).toBe(1);
     expect(stderr).toContain("text or stdin is required");
   });
+
+  test.each(["sfx", "music"])(
+    "audio %s with no prompt and no stdin exits 1",
+    async (command) => {
+      const { exitCode, stderr } = await run("audio", command);
+      expect(exitCode).toBe(1);
+      expect(stderr).toContain("prompt or stdin is required");
+    }
+  );
 
   test("audio transcribe with no audio and no stdin exits 1", async () => {
     const { exitCode, stderr } = await run("audio", "transcribe");

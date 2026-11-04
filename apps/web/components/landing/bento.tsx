@@ -8,7 +8,7 @@ const items: readonly item[] = [
   {
     id: "001",
     title: "Inline preview",
-    body: "Images and video frames render in terminals that support the Kitty graphics protocol, and speech plays back after it's saved.",
+    body: "Images and video frames render in terminals that support the Kitty graphics protocol, and generated audio plays back after it's saved.",
   },
   {
     id: "002",

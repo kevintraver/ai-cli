@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### New Features
+
+- Add `ai audio sfx` for sound effects and `ai audio music` for music, with `elevenlabs/sound-effects-v2` and `elevenlabs/music-v2.5` as the defaults. `sfx` takes `--duration`, `--loop`, and `--prompt-influence`; `music` takes `--length` and `--instrumental`, and its `--timeout` defaults to 600 seconds. Out-of-range values fail before any request. Set other defaults with `AI_CLI_SFX_MODEL` and `AI_CLI_MUSIC_MODEL`. MCP adds the `audio_sfx` and `audio_music` tools to the media profile.
+- Add `--provider-options <path>` to `ai audio speak`, `sfx`, and `music` for model settings that have no flag. A value in the file overrides the matching flag.
+- `ai models --type` accepts `sfx` and `music`. `--type speech` now lists only text-to-speech models, because sound effect and music models now have their own types. `ai models --json` reports those models with the `sfx` or `music` capability instead of `speech`.
+
 ## 0.9.0
 
 <!-- release:start -->

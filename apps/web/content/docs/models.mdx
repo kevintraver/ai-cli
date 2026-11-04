@@ -13,6 +13,8 @@ Each command type has a default model used when `-m` is not specified:
 | image | `openai/gpt-image-2` | `AI_CLI_IMAGE_MODEL` |
 | video | `bytedance/seedance-2.0` | `AI_CLI_VIDEO_MODEL` |
 | speech | `openai/tts-1` | `AI_CLI_SPEECH_MODEL` |
+| sound effect (`audio sfx`) | `elevenlabs/sound-effects-v2` | `AI_CLI_SFX_MODEL` |
+| music (`audio music`) | `elevenlabs/music-v2.5` | `AI_CLI_MUSIC_MODEL` |
 | transcription | `openai/whisper-1` | `AI_CLI_TRANSCRIPTION_MODEL` |
 | evaluation (decide) | `typesafe-ai/jev` | `AI_CLI_EVALUATION_MODEL` |
 
@@ -61,11 +63,15 @@ This produces 4 images total (2 per model), saved with generated filename stems 
 ```bash
 ai models                          # all models
 ai models --type image             # image models only
-ai models --type audio             # speech and transcription models
+ai models --type audio             # speech, sound effect, music, and transcription models
+ai models --type sfx               # sound effect models only
+ai models --type music             # music models only
 ai models --type evaluation        # evaluation models such as Jev
 ai models --creator google         # Google models only
 ai models --json                   # JSON with descriptions
 ```
+
+The Gateway lists sound effect and music models as speech models. `ai models` separates them by tag, so `--type speech` lists only text-to-speech models, and `audio speak`, `audio sfx`, and `audio music` each resolve short names against their own type.
 
 In human mode, models are grouped by creator and display short names. Use `--json` for machine-readable output with full IDs and descriptions.
 
